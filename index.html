@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Memory Game</title>
+  <script src="https://unpkg.com/react@16/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+
+  <!-- Add Axios for making HTTP requests -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <style>
+    #container {
+      padding: 20px;
+      background-color: lightgray;
+      display: flex;
+      flex-direction: horizontal;
+    }
+    body {
+      background-color: lightgray;
+    }
+    .reset-button {
+      font-size: 20px;
+      padding: 10px 20px;
+      margin-top: 10px;
+      outline: 2px solid black;
+    }
+    .popup {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .popup-content {
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      text-align: center;
+    }
+    .popup-buttons {
+      margin-top: 20px;
+    }
+    .popup-button {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container"></div>
+
+
+  <script type="text/babel">
+
+    class Leaderboard extends React.Component {
+      render() {
+        const { highscores } = this.props;
+        console.log('highscores is:', highscores);
+        // const data = await fetch('http://localhost:3000/high-scores');
+        // console.log('data is: ', data);
+        const tableStyle = {
+          width: "100%",
+          borderCollapse: "collapse",
+          fontSize: "15px",
+          fontWeight: "bold",
+          flexDirection: "horizontal",
+          border: "1px solid black",
+        };
+        const thStyle = {
+          border: "1px solid black",
+          padding: "10px",
+          textAlign: "center",
+          backgroundColor: "#f2f2f2",
+        }
+        const tdStyle = {
+          padding: "10px",
+          textAlign: "center",
+        }
+        const boardStyle = {
+          paddingLeft: "100px",
+          width: "30%",
+          textAlign: "center",
+        }
+        const highscoreRows = [];
+        if(highscores){
+          highscores.forEach(score => {
+            highscoreRows.push(
+                    <tr>
+                      <td>
+                        {score.name}
+                      </td>
+                      <td>
+                        {score.score}
+                      </td>
+                    </tr>
+            )
+          });
+        }
+        return (<div style={boardStyle}>
+          <h1>Leaderboard</h1>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Name</th>
+                <th style={thStyle}>Seconds</th>
+              </tr>
+            </thead>
+            <tbody>
+            {highscoreRows}
+            </tbody>
+          </table>
+        </div>);
+      }
+    }
+
+
+
+    // puts cards in grid fashion for easy styling
+    const divStyle = {
+      display: "grid",
+      gridTemplateColumns: "repeat(5, 1fr)",
+      gap: "0px",
+      justifyContent: "center",
+      gridTemplateColumns: "auto auto auto auto auto",
+    };
+
+    // generating the random colors
+    function getRandomColor() {
+      let randomColor = "#";
+      for (let i = 0; i < 6; i++) {
+        randomColor += Math.floor(Math.random() * 16)
+          .toString(16)
+          .toUpperCase();
+      }
+      return randomColor;
+    }
+
+    function addColors(numOfCards) {
+      let colors = [];
+      for (let i = 0; i < numOfCards; i++) {
+        let newColor = getRandomColor();
+        while (colors.includes(newColor)) {
+          newColor = getRandomColor();
+        }
+        colors.push(newColor);
+      }
+      return colors;
+    }
+
+    class Square extends React.Component {
+      render() {
+        const { reveal, matched, color } = this.props;
+        const squareStyle = {
+          height: 150,
+          backgroundColor: matched ? "lightgray" : true ? color : "#888",
+        };
+
+        return <div style={squareStyle}></div>;
+      }
+    }
+
+    class Label extends React.Component {
+      render() {
+        const { reveal, label } = this.props;
+        const labelStyle = {
+          fontFamily: "sans-serif",
+          fontWeight: "bold",
+          padding: 13,
+          margin: 0,
+          color: reveal ? "black" : "black",
+        };
+
+        return <p style={labelStyle}>{label}</p>;
+      }
+    }
+
+    class Card extends React.Component {
+      constructor(props) {
+        super(props);
+
+        this.state = {
+          reveal: false, // Tracks whether the card is revealed or hidden
+          matched: false, // Tracks whether the card is matched with another card
+        };
+      }
+
+      handleClick() {
+        const { reveal, matched } = this.state;
+        const { revealedCards, handleCardClick, color, index } = this.props;
+
+        if (!reveal && revealedCards.length < 2 && !matched) {
+          this.setState({ reveal: true }, () => {
+            handleCardClick(color, index);
+          });
+        }
+      }
+
+      componentDidUpdate(prevProps) {
+        const { revealedCards, matched } = this.props;
+
+        // If two cards were previously revealed and now no cards are revealed,
+        // hide the current card by setting reveal state to false
+        if (prevProps.revealedCards.length === 2 && revealedCards.length === 0) {
+          this.setState({ reveal: false });
+        }
+
+        // If the matched prop changes and becomes true for this card,
+        // update the matched state accordingly
+        if (prevProps.matched !== matched && matched) {
+          this.setState({ matched: true });
+        }
+
+        // If the matched prop changes and becomes false for this card,
+        // update the matched state accordingly (to reset the matched cards)
+        if (prevProps.matched !== matched && !matched) {
+          this.setState({ matched: false });
+        }
+      }
+
+      render() {
+        const { color, revealedCards } = this.props;
+        const { reveal, matched } = this.state;
+
+        const cardStyle = {
+          height: 200,
+          width: 150,
+          margin: "5px 5px",
+          backgroundColor: matched ? "lightgray" : "#FFF",
+          display: "inline-block",
+          borderStyle: "solid",
+          borderWidth: "3px",
+          borderColor: matched ? "transparent" : "black",
+          cursor: matched ? "default" : "pointer",
+        };
+
+        const label = matched ? "" : reveal ? color : "Click to reveal";
+
+        return (
+          <div
+            style={cardStyle}
+            onClick={() => this.handleClick()}
+            disabled={matched}
+          >
+            <Square color={color} reveal={reveal} matched={matched} />
+            <Label label={label} reveal={reveal} />
+          </div>
+        );
+      }
+    }
+    class MemoryGame extends React.Component {
+      constructor(props) {
+        super(props);
+
+        const numPairs = 10;
+        const colors = addColors(numPairs);
+        const cards = colors.concat(colors).sort(() => Math.random() - 0.5);
+
+        this.state = {
+          cards: cards.map((color, index) => ({
+            id: index,
+            color,
+            matched: false,
+          })),
+          revealedCards: [],
+          matches: 0,
+          attempts: 0,
+          showCompletionPopup: false,
+          highScore: null,
+          timerStarted: false,
+          timeElapsed: 0,
+          playerName: "",
+        };
+      }
+
+      componentDidMount() {
+        console.log('inside of component did mount');
+        // const highScoresMock = {
+        //   scores: [
+        //     {
+        //       name: "John",
+        //       score: "9"
+        //     },
+        //     {
+        //       name: "lengthy",
+        //       score: "10"
+        //     }
+        //   ]
+        // };
+        // if (highScoresMock.scores.length > 0) {
+        //   const minHighScore = Math.min(...highScoresMock.scores.map((score) => score.score));
+        //   this.setState({ highScore: minHighScore });
+        //   this.setState({scores: highScoresMock.scores});
+        // }
+        // {"scores":[{"name":"John","score":"9"},{"name":"lengthy","score":"10"}]}
+        axios
+          .get('http://localhost:3000/high-scores', {withCredentials: false, headers: {
+            test: 'id',
+            'Access-Control-Allow-Origin': '*',
+            Origin: 'http://localhost:3000'
+          }})
+          .then((response) => {
+            console.log('response is:', response);
+            console.log('response.data is:', response.data);
+            const highScores = response.data;;
+            const sortedScores = highScores.scores.sort((a,b) => {
+              if(a.score <= b.score){
+                return -1;
+              }
+            });
+            console.log('sortedScores is:', sortedScores);
+
+              const minHighScore = Math.min(...highScores.scores.map((score) => score.score));
+              this.setState({ highScore: minHighScore });
+              this.setState({scores: sortedScores});
+          })
+          .catch((error) => {
+            console.error('Error retrieving high scores:', error);
+          });
+      }
+
+      startTimer() {
+        this.timerInterval = setInterval(() => {
+          this.setState((prevState) => ({
+            timeElapsed: prevState.timeElapsed + 1,
+          }));
+        }, 1000);
+      }
+
+      stopTimer() {
+        clearInterval(this.timerInterval);
+      }
+
+      handleCardClick(color, index) {
+        const { revealedCards, cards, matches, attempts, timerStarted } = this.state;
+
+        if (!timerStarted) {
+          this.setState({ timerStarted: true }, () => {
+            this.startTimer();
+          });
+        }
+
+        if (
+          revealedCards.length < 2 &&
+          !revealedCards.some((rc) => rc.index === index)
+        ) {
+          const updatedRevealedCards = [...revealedCards, { color, index }];
+
+          this.setState({ revealedCards: updatedRevealedCards });
+
+          if (updatedRevealedCards.length === 2) {
+            if (updatedRevealedCards[0].color === updatedRevealedCards[1].color) {
+              setTimeout(() => this.removeCards(), 1000);
+              this.setState({ matches: matches + 1 });
+            } else {
+              setTimeout(() => this.resetCards(), 1000);
+            }
+            this.setState({ attempts: attempts + 1 });
+          }
+        }
+      }
+
+      removeCards() {
+        const { revealedCards, cards } = this.state;
+        const [card1, card2] = revealedCards;
+
+        const updatedCards = cards.map((card) => {
+          if (card.id === card1.index || card.id === card2.index) {
+            return { ...card, matched: true };
+          }
+          return card;
+        });
+
+        this.setState(
+          {
+            cards: updatedCards,
+            revealedCards: [],
+          },
+          () => {
+            if (this.state.matches === 10) {
+              this.stopTimer();
+              this.showCompletionPopup();
+            }
+          }
+        );
+      }
+
+      resetCards() {
+        this.setState({
+          revealedCards: [],
+        });
+      }
+
+      handleSaveScore() {
+        console.log('this is::', this);
+        console.log("this.state is:", this.state);
+        const { playerName, highScore, timeElapsed, scores } = this.state;
+
+        console.log("scores is", scores);
+
+        console.log('highscore', highScore);
+        console.log('timeElapsed', timeElapsed);
+        if (highScore === null || scores.length < 10 ||timeElapsed < scores[9]) {
+          axios
+                  .post('http://localhost:3000/high-scores', { score: timeElapsed, name: playerName})
+                  .then((response) => {
+                      axios
+                        .get('http://localhost:3000/high-scores')
+                        .then((response) => {
+                          const highScores = response.data;;
+                          if (highScores.scores.length > 0) {
+                            const minHighScore = Math.min(...highScores.scores.map((score) => score.score));
+                            this.setState({ highScore: minHighScore });
+                            highScores.scores.sort((a,b) => (a.score < b.score));
+                            this.setState({scores: highScores.scores});
+                          }
+                        })
+                        .catch((error) => {
+                          console.error('Error retrieving high scores:', error);
+                        });
+                  })
+                  .catch((error) => {
+                    console.error('Error saving high score:', error);
+                  });
+          if(timeElapsed < highScore){
+            this.setState({highScore: timeElapsed});
+          }
+        }
+      }
+
+      showCompletionPopup() {
+        this.setState({ showCompletionPopup: true });
+      }
+
+      hideCompletionPopup() {
+        this.setState({ showCompletionPopup: false });
+      }
+
+      handleResetGame = () => {
+        const { timerStarted } = this.state;
+        this.stopTimer();
+        this.setState((prevState) => {
+          const numPairs = 10;
+          const colors = addColors(numPairs);
+          const cards = colors.concat(colors).sort(() => Math.random() - 0.5);
+
+          // If the timer was started and there's no high score yet,
+          // update the high score to the current time elapsed
+          let updatedHighScore = prevState.highScore;
+          if (timerStarted && prevState.highScore === null) {
+            updatedHighScore = prevState.timeElapsed;
+          }
+
+          return {
+            cards: cards.map((color, index) => ({
+              id: index,
+              color,
+              matched: false,
+            })),
+            revealedCards: [],
+            attempts: 0,
+            matches: 0,
+            showCompletionPopup: false,
+            highScore: updatedHighScore,
+            timerStarted: false,
+            timeElapsed: 0,
+          };
+        });
+      };
+
+      handlePlayAgain = () => {
+        this.stopTimer();
+        this.setState((prevState) => {
+          const numPairs = 10;
+          const colors = addColors(numPairs);
+          const cards = colors.concat(colors).sort(() => Math.random() - 0.5);
+
+          return {
+            cards: cards.map((color, index) => ({
+              id: index,
+              color,
+              matched: false,
+            })),
+            revealedCards: [],
+            matches: 0,
+            attempts: 0,
+            showCompletionPopup: false,
+            highScore: prevState.highScore === null ? prevState.timeElapsed : Math.min(prevState.highScore, prevState.timeElapsed),
+            timerStarted: false,
+            timeElapsed: 0,
+          };
+        });
+      };
+
+      handleExit() {
+        window.close();
+      }
+
+      handleNameChange = (e) => {
+        this.setState({ playerName: e.target.value });
+      };
+
+      render() {
+        const {
+          cards,
+          revealedCards,
+          matches,
+          attempts,
+          showCompletionPopup,
+          highScore,
+          timerStarted,
+          timeElapsed,
+          playerName,
+          scores,
+        } = this.state;
+        console.log('scores is:', scores);
+        return (
+          <div style={{ display: 'flex' }}>
+            <div style={{ marginRight: '150px', fontSize: '30px' }}>
+              <div>Total Matches: 10</div>
+              <div>Your Matches: {matches}</div>
+              <div>Your Attempts: {attempts}</div>
+              <div>
+                High Score: {highScore !== null ? `${highScore} seconds` : '-'}
+              </div>
+              <div>
+                Timer: {timerStarted ? `${Math.floor(timeElapsed / 60)}:${(timeElapsed % 60)
+                  .toString()
+                  .padStart(2, '0')}` : '0:00'}
+              </div>
+              <button className="reset-button" onClick={this.handleResetGame}>
+                Reset Game
+              </button>
+            </div>
+            <div style={divStyle}>
+              {cards.map((card) => (
+                <Card
+                  key={card.id}
+                  color={card.color}
+                  index={card.id}
+                  revealedCards={revealedCards}
+                  matched={card.matched}
+                  handleCardClick={(color, index) =>
+                    this.handleCardClick(color, index)
+                  }
+                />
+              ))}
+            </div>
+            <React.Fragment>
+              <Leaderboard highscores={scores}/>
+            </React.Fragment>
+            {showCompletionPopup && (
+              <div className="popup">
+                <div className="popup-content">
+                  <p>You've completed the game!</p>
+                  <p>
+                    Your Time: {`${Math.floor(timeElapsed / 60)}:${(timeElapsed % 60)
+                      .toString()
+                      .padStart(2, '0')}`}
+                  </p>
+                  <input
+                          type="text"
+                          value={playerName}
+                          onChange={this.handleNameChange}
+                          placeholder="Enter your name"
+                  />
+                  <div className="popup-buttons">
+                    <button className="popup-button" onClick={this.handleSaveScore.bind(this)}>
+                      Save your score!
+                    </button>
+                    <button className="popup-button" onClick={this.handlePlayAgain}>
+                      Try again?
+                    </button>
+
+                    <button className="popup-button" onClick={this.handleExit}>
+                      Exit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    ReactDOM.render(<React.Fragment>
+            <MemoryGame />
+          </React.Fragment>, document.querySelector("#container"));
+  </script>
+</body>
+</html>
